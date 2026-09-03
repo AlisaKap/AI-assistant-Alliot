@@ -9,7 +9,7 @@ build/
 src-tauri/target/
 
 # AI models
-src-tauri/models/
+src-tauri/models/.bin
 
 # IDE
 .idea/
