@@ -8,6 +8,9 @@ build/
 # Tauri
 src-tauri/target/
 
+# AI models
+src-tauri/models/
+
 # IDE
 .idea/
 
@@ -17,9 +20,6 @@ src-tauri/target/
 
 # Logs
 *.log
-
-# AI models
-src-tauri/models/
 
 # OS
 .DS_Store
