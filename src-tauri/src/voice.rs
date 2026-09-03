@@ -106,6 +106,16 @@ static WAKE_WORD_LISTENER_RUNNING:
 
 
 // ============================================================
+// VOICE STATE
+// ============================================================
+
+fn set_voice_state(state: crate::voice_state::VoiceState) {
+    if let Some(manager) = crate::VOICE_STATE.get() {
+        manager.set(state);
+    }
+}
+
+// ============================================================
 // MICROPHONE
 // ============================================================
 
@@ -319,6 +329,10 @@ impl Microphone {
                 })?
                 .clone();
 
+
+        set_voice_state(
+            crate::voice_state::VoiceState::Off
+        );
 
         println!(
             "[VOICE] recording = OFF, {} samples",
@@ -831,6 +845,10 @@ pub fn start_microphone()
         println!(
             "[MIC] микрофон постоянно слушает: {} Hz",
             sample_rate
+        );
+
+        set_voice_state(
+            crate::voice_state::VoiceState::WaitingForWakeWord
         );
 
 
@@ -1569,6 +1587,10 @@ fn listen_for_command(
     // UI: LISTENING
     // ========================================================
 
+    set_voice_state(
+        crate::voice_state::VoiceState::Listening
+    );
+
     emit_event(
         app,
         "voice-listening",
@@ -1608,6 +1630,10 @@ fn listen_for_command(
     // UI: ANALYZING
     // ========================================================
 
+    set_voice_state(
+        crate::voice_state::VoiceState::Analyzing
+    );
+
     emit_event(
         app,
         "voice-analyzing",
@@ -1634,6 +1660,10 @@ fn listen_for_command(
     // ========================================================
     // REMOVE WAKE WORD
     // ========================================================
+
+    set_voice_state(
+        crate::voice_state::VoiceState::WaitingForWakeWord
+    );
 
     let command =
         crate::wake_word::remove_wake_word(
