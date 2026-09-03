@@ -5,9 +5,13 @@ mod command_parser;
 mod commands;
 mod config;
 mod voice;
+mod voice_state;
 mod wake_word;
 
 use std::sync::OnceLock;
+
+pub static VOICE_STATE: OnceLock<voice_state::VoiceStateManager> =
+    OnceLock::new();
 
 use crate::voice::{
     start_microphone,
@@ -45,6 +49,7 @@ pub fn run() {
 
         .setup(|app| {
 
+
             // --------------------------------------------------
             // MICROPHONE
             // --------------------------------------------------
@@ -69,6 +74,10 @@ pub fn run() {
             println!(
                 "Микрофон инициализирован"
             );
+
+            VOICE_STATE
+                .set(voice_state::VoiceStateManager::new())
+                .expect("VOICE_STATE уже был инициализирован");
 
 
             // --------------------------------------------------
@@ -191,3 +200,4 @@ pub fn run() {
             "error while running Alliot"
         );
 }
+

@@ -23,7 +23,6 @@ use std::time::Duration;
 use tauri::{
     AppHandle,
     Emitter,
-    Manager,
 };
 
 use whisper_rs::{
@@ -38,47 +37,58 @@ use whisper_rs::{
 // SETTINGS
 // ============================================================
 
-const MODEL_PATH: &str = "models/ggml-small.bin";
+const MODEL_PATH: &str =
+    "models/ggml-small.bin";
 
-const WHISPER_SAMPLE_RATE: u32 = 16_000;
+const WHISPER_SAMPLE_RATE: u32 =
+    16_000;
 
 
 // ============================================================
 // WAKE WORD
 // ============================================================
 
-const WAKE_WORD_WINDOW_SECONDS: f32 = 3.0;
+const WAKE_WORD_WINDOW_SECONDS: f32 =
+    3.0;
 
-const WAKE_WORD_INTERVAL_MS: u64 = 700;
+const WAKE_WORD_INTERVAL_MS: u64 =
+    700;
 
-const WAKE_WORD_SILENCE_THRESHOLD: f32 = 0.012;
+const WAKE_WORD_SILENCE_THRESHOLD: f32 =
+    0.009;
 
 
 // ============================================================
 // COMMAND
 // ============================================================
 
-const MAX_COMMAND_SECONDS: f32 = 7.0;
+const MAX_COMMAND_SECONDS: f32 =
+    7.0;
 
-const COMMAND_SILENCE_SECONDS: f32 = 1.0;
+const COMMAND_SILENCE_SECONDS: f32 =
+    1.0;
 
-const SILENCE_THRESHOLD: f32 = 0.02;
+const SILENCE_THRESHOLD: f32 =
+    0.02;
 
-const MIN_SPEECH_SECONDS: f32 = 0.15;
+const MIN_SPEECH_SECONDS: f32 =
+    0.10;
 
 
 // ============================================================
 // RING BUFFER
 // ============================================================
 
-const RING_BUFFER_SECONDS: usize = 5;
+const RING_BUFFER_SECONDS: usize =
+    5;
 
 
 // ============================================================
 // WHISPER
 // ============================================================
 
-static WHISPER_CONTEXT: OnceLock<Result<WhisperContext, String>> =
+static WHISPER_CONTEXT:
+    OnceLock<Result<WhisperContext, String>> =
     OnceLock::new();
 
 
@@ -86,10 +96,12 @@ static WHISPER_CONTEXT: OnceLock<Result<WhisperContext, String>> =
 // ASSISTANT STATE
 // ============================================================
 
-static ASSISTANT_AWAKE: AtomicBool =
+static ASSISTANT_AWAKE:
+    AtomicBool =
     AtomicBool::new(false);
 
-static WAKE_WORD_LISTENER_RUNNING: AtomicBool =
+static WAKE_WORD_LISTENER_RUNNING:
+    AtomicBool =
     AtomicBool::new(false);
 
 
@@ -138,6 +150,7 @@ impl Microphone {
     pub fn sample_rate(
         &self,
     ) -> u32 {
+
         self.sample_rate
     }
 
@@ -163,6 +176,7 @@ impl Microphone {
                     "Не удалось получить аудиобуфер".to_string()
                 })?;
 
+
         Ok(
             buffer.snapshot()
         )
@@ -180,7 +194,9 @@ impl Microphone {
                     "Не удалось получить аудиобуфер".to_string()
                 })?;
 
+
         buffer.clear();
+
 
         Ok(())
     }
@@ -222,6 +238,7 @@ impl Microphone {
                         "Не удалось очистить буфер записи".to_string()
                     })?;
 
+
             buffer.clear();
         }
 
@@ -238,6 +255,7 @@ impl Microphone {
                         "Ошибка состояния речи".to_string()
                     })?;
 
+
             *value = 0;
         }
 
@@ -249,6 +267,7 @@ impl Microphone {
                     .map_err(|_| {
                         "Ошибка состояния тишины".to_string()
                     })?;
+
 
             *value = 0;
         }
@@ -379,6 +398,10 @@ impl Microphone {
 pub fn start_microphone()
     -> Result<Microphone, String>
 {
+
+    if let Some(state) = crate::VOICE_STATE.get() {
+        state.set(crate::voice_state::VoiceState::WaitingForWakeWord);
+    }
 
     let host =
         cpal::default_host();
@@ -669,6 +692,7 @@ pub fn start_microphone()
                                     data
                                 );
 
+
                             process_audio(
                                 &samples,
                                 sample_rate,
@@ -740,6 +764,7 @@ pub fn start_microphone()
                                 convert_u16_to_f32(
                                     data
                                 );
+
 
                             process_audio(
                                 &samples,
@@ -909,6 +934,7 @@ fn process_audio(
     let recorded_samples =
         match recording_buffer.lock()
         {
+
             Ok(buffer) =>
                 buffer.len(),
 
@@ -1033,6 +1059,7 @@ fn process_audio(
     let silence_count =
         match silence_samples.lock()
         {
+
             Ok(mut value) => {
 
                 *value +=
@@ -1065,6 +1092,7 @@ fn process_audio(
     let speech_count =
         match speech_samples.lock()
         {
+
             Ok(value) =>
                 *value,
 
@@ -1189,7 +1217,15 @@ pub fn start_wake_word_listener(
             if ASSISTANT_AWAKE.load(
                 Ordering::Relaxed
             ) {
+                continue;
+            }
 
+
+            // ==================================================
+            // RECORDING ACTIVE
+            // ==================================================
+
+            if microphone.is_recording() {
                 continue;
             }
 
@@ -1215,7 +1251,6 @@ pub fn start_wake_word_listener(
             if audio.len()
                 < window_samples / 2
             {
-
                 continue;
             }
 
@@ -1247,7 +1282,6 @@ pub fn start_wake_word_listener(
             if volume
                 < WAKE_WORD_SILENCE_THRESHOLD
             {
-
                 continue;
             }
 
@@ -1293,8 +1327,12 @@ pub fn start_wake_word_listener(
             // FIND WAKE WORD
             // ==================================================
 
+            if let Some(state) = crate::VOICE_STATE.get() {
+                state.set(crate::voice_state::VoiceState::Listening);
+            }
+
             let command =
-                match extract_wake_word_command(
+                match crate::wake_word::extract_command(
                     &text
                 ) {
 
@@ -1310,10 +1348,6 @@ pub fn start_wake_word_listener(
                 "[WAKE] АЛЛИОТ ОБНАРУЖЕН"
             );
 
-            ASSISTANT_AWAKE.store(
-                true,
-                Ordering::SeqCst,
-            );
 
             ASSISTANT_AWAKE.store(
                 true,
@@ -1345,8 +1379,38 @@ pub fn start_wake_word_listener(
                 );
 
 
+                // ------------------------------------------------
+                // UI: WAKE
+                // ------------------------------------------------
+
+                emit_event(
+                    &app,
+                    "wake-word-detected",
+                );
+
+
+                // ------------------------------------------------
+                // UI: ANALYZING
+                // ------------------------------------------------
+
+                emit_event(
+                    &app,
+                    "voice-analyzing",
+                );
+
+
                 execute_voice_command(
                     &command
+                );
+
+
+                // ------------------------------------------------
+                // UI: IDLE
+                // ------------------------------------------------
+
+                emit_event(
+                    &app,
+                    "voice-idle",
                 );
 
 
@@ -1364,9 +1428,10 @@ pub fn start_wake_word_listener(
                 continue;
             }
 
-            // ========================================================
+
+            // ==================================================
             // ONLY WAKE WORD
-            // ========================================================
+            // ==================================================
 
             println!(
                 "[WAKE] Аллиот активирован"
@@ -1377,26 +1442,19 @@ pub fn start_wake_word_listener(
             );
 
 
-            // ========================================================
-            // UI: LISTENING
-            // ========================================================
+            // ==================================================
+            // UI: WAKE
+            // ==================================================
 
-            if let Err(error) =
-                app.emit(
-                    "wake-word-detected",
-                    ()
-                )
-            {
-                eprintln!(
-                    "[WAKE] ошибка отправки события: {}",
-                    error
-                );
-            }
+            emit_event(
+                &app,
+                "wake-word-detected",
+            );
 
 
-            // ========================================================
+            // ==================================================
             // LISTEN FOR COMMAND
-            // ========================================================
+            // ==================================================
 
             match listen_for_command(
                 &microphone,
@@ -1423,26 +1481,23 @@ pub fn start_wake_word_listener(
             }
 
 
-            // ========================================================
-            // UI: RETURN TO IDLE
-            // ========================================================
+            // ==================================================
+            // UI: IDLE
+            // ==================================================
 
-            if let Err(error) =
-                app.emit(
-                    "voice-idle",
-                    ()
-                )
-            {
-                eprintln!(
-                    "[WAKE] ошибка отправки voice-idle: {}",
-                    error
-                );
+            if let Some(state) = crate::VOICE_STATE.get() {
+                state.set(crate::voice_state::VoiceState::Analyzing);
             }
 
+            emit_event(
+                &app,
+                "voice-idle",
+            );
 
-            // ========================================================
+
+            // ==================================================
             // RETURN TO WAKE MODE
-            // ========================================================
+            // ==================================================
 
             ASSISTANT_AWAKE.store(
                 false,
@@ -1453,7 +1508,6 @@ pub fn start_wake_word_listener(
             println!(
                 "[WAKE] снова ожидаю \"Аллиот\""
             );
-
         }
 
 
@@ -1505,51 +1559,32 @@ fn listen_for_command(
     app: &AppHandle,
 ) -> Result<String, String>
 {
+
     println!(
         "[COMMAND] слушаю..."
     );
 
-    println!(
-        "[UI TEST] отправляю voice-listening"
+
+    // ========================================================
+    // UI: LISTENING
+    // ========================================================
+
+    emit_event(
+        app,
+        "voice-listening",
     );
 
-    let window =
-        app
-            .get_webview_window("main")
-            .ok_or_else(|| {
-                "main window not found".to_string()
-            })?;
 
-    let window =
-        app
-            .get_webview_window("main")
-            .ok_or_else(|| {
-                "main window not found".to_string()
-            })?;
-
-    window
-        .emit(
-            "voice-listening",
-            ()
-        )
-        .map_err(|error| {
-            format!(
-                "Не удалось отправить voice-listening: {}",
-                error
-            )
-        })?;
-
-    println!(
-        "[UI] voice-listening отправлено в main"
-    );
-
-    println!(
-        "[UI TEST] voice-listening отправлено"
-    );
-
+    // ========================================================
+    // START RECORDING
+    // ========================================================
 
     microphone.start_recording()?;
 
+
+    // ========================================================
+    // WAIT
+    // ========================================================
 
     let audio =
         microphone.wait_for_recording_end()?;
@@ -1569,6 +1604,20 @@ fn listen_for_command(
     );
 
 
+    // ========================================================
+    // UI: ANALYZING
+    // ========================================================
+
+    emit_event(
+        app,
+        "voice-analyzing",
+    );
+
+
+    // ========================================================
+    // TRANSCRIBE
+    // ========================================================
+
     let text =
         transcribe(
             &audio,
@@ -1582,107 +1631,49 @@ fn listen_for_command(
     );
 
 
-    Ok(
-        remove_wake_word(
+    // ========================================================
+    // REMOVE WAKE WORD
+    // ========================================================
+
+    let command =
+        crate::wake_word::remove_wake_word(
             &text
-        )
-    )
-}
-
-
-// ============================================================
-// WAKE WORD PARSER
-// ============================================================
-
-fn extract_wake_word_command(
-    text: &str,
-) -> Option<String>
-{
-
-    let normalized =
-        normalize_voice_text(
-            text
         );
 
 
-    let words =
-        normalized
-            .split_whitespace()
-            .map(|word| {
-
-                word.trim_matches(
-                    |c: char| {
-                        !c.is_alphabetic()
-                    }
-                )
-                .to_string()
-            })
-            .collect::<Vec<_>>();
-
-
-    let index =
-        words
-            .iter()
-            .position(|word| {
-                is_wake_word(word)
-            })?;
-
-
-    Some(
-        words
-            .into_iter()
-            .skip(index + 1)
-            .collect::<Vec<_>>()
-            .join(" ")
-    )
+    Ok(command)
 }
 
 
 // ============================================================
-// WAKE WORD MATCH
+// UI EVENT
 // ============================================================
 
-fn is_wake_word(
-    word: &str,
-) -> bool {
+fn emit_event(
+    app: &AppHandle,
+    event: &str,
+) {
 
-    matches!(
-        word,
+    if let Err(error) =
+        app.emit(
+            event,
+            ()
+        )
+    {
 
-        "аллиот"
-        | "алиот"
-        | "аллиод"
-        | "алиод"
-        | "алет"
-        | "алед"
-        | "алют"
-        | "элиот"
-        | "эллиот"
-        | "элет"
-        | "эллид"
-        | "элют"
-    )
-}
+        eprintln!(
+            "[UI] ошибка события {}: {}",
+            event,
+            error
+        );
 
+    } else {
 
-// ============================================================
-// REMOVE WAKE WORD
-// ============================================================
-
-fn remove_wake_word(
-    text: &str,
-) -> String {
-
-    normalize_voice_text(
-        text
-    )
-    .split_whitespace()
-    .filter(
-        |word|
-            !is_wake_word(word)
-    )
-    .collect::<Vec<_>>()
-    .join(" ")
+        println!(
+            "[UI] {} отправлено",
+            event
+        );
+    }
 }
 
 
@@ -2030,7 +2021,7 @@ pub fn transcribe(
 
 
     let result =
-        normalize_voice_text(
+        normalize_transcript(
             &result
         );
 
@@ -2045,6 +2036,23 @@ pub fn transcribe(
 
 
     Ok(result)
+}
+
+
+// ============================================================
+// NORMALIZE TRANSCRIPT
+// ============================================================
+
+fn normalize_transcript(
+    text: &str,
+) -> String {
+
+    text
+        .to_lowercase()
+        .replace('ё', "е")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 
@@ -2210,130 +2218,4 @@ fn convert_u16_to_f32(
             }
         )
         .collect()
-}
-
-
-// ============================================================
-// NORMALIZE
-// ============================================================
-
-fn normalize_voice_text(
-    text: &str,
-) -> String {
-
-    let replacements = [
-
-        // ----------------------------------------------------
-        // EXACT / CLOSE
-        // ----------------------------------------------------
-
-        ("аллиотт", "аллиот"),
-
-        ("аллиод", "аллиот"),
-        ("алиод", "аллиот"),
-
-        ("аллиот", "аллиот"),
-        ("алиот", "аллиот"),
-        ("аллет", "аллиот"),
-
-        ("алёт", "аллиот"),
-        ("алет", "аллиот"),
-        ("алло", "аллиот"),
-        ("але", "аллиот"),
-        ("эллот", "аллиот"),
-        ("элло", "аллиот"),
-
-        ("аллиотд", "аллиот"),
-        ("алёд", "аллиот"),
-        ("алед", "аллиот"),
-        ("эй, люд", "аллиот"),
-
-        ("алют", "аллиот"),
-
-        // ----------------------------------------------------
-        // ELIOT VARIANTS
-        // ----------------------------------------------------
-
-        ("элиот", "аллиот"),
-        ("эллиот", "аллиот"),
-
-        ("элиод", "аллиот"),
-        ("эллиод", "аллиот"),
-
-        ("элет", "аллиот"),
-        ("элиет", "аллиот"),
-
-        ("элют", "аллиот"),
-        ("эллиут", "аллиот"),
-        ("элот", "аллиот"),
-
-        // ----------------------------------------------------
-        // SPLIT WORDS
-        // ----------------------------------------------------
-
-        ("али от", "аллиот"),
-        ("алли от", "аллиот"),
-
-        ("а лиот", "аллиот"),
-        ("ал лиот", "аллиот"),
-
-        ("али ёт", "аллиот"),
-        ("а ли ёт", "аллиот"),
-
-        ("элли от", "аллиот"),
-        ("эли от", "аллиот"),
-
-        // ----------------------------------------------------
-        // COMMON WHISPER ERRORS
-        // ----------------------------------------------------
-
-        ("наллиот", "аллиот"),
-        ("налиот", "аллиот"),
-
-        ("аллит", "аллиот"),
-        ("аллид", "аллиот"),
-    ];
-
-
-    let mut result =
-        text.to_lowercase();
-
-
-    // --------------------------------------------------------
-    // NORMALIZE YO
-    // --------------------------------------------------------
-
-    result =
-        result.replace(
-            'ё',
-            "е"
-        );
-
-
-    // --------------------------------------------------------
-    // REPLACEMENTS
-    // --------------------------------------------------------
-
-    for (
-        wrong,
-        correct
-    ) in replacements
-    {
-
-        result =
-            result.replace(
-                wrong,
-                correct
-            );
-    }
-
-
-    // --------------------------------------------------------
-    // CLEAN WHITESPACE
-    // --------------------------------------------------------
-
-    result
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }

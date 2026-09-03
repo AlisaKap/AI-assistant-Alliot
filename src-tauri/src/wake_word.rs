@@ -1,326 +1,341 @@
-const WAKE_WORD_VARIANTS: &[&str] = &[
-    // Нормальное распознавание
-    "аллиот",
+// ============================================================
+// WAKE WORD
+// ============================================================
 
-    // Частые варианты
+const WAKE_WORD_VARIANTS: &[&str] = &[
+    "аллиот",
     "алиот",
     "алиод",
     "аллиод",
     "аллит",
-    "аллиут",
-
-    // Whisper может менять начало / гласные
     "алет",
     "алед",
-    "алюд",
-    "алют",
+    "алло",
 
-    // Варианты через "э"
-    "элиот",
-    "элиод",
-    "эллиот",
-    "эллиод",
-    "эллоот",
-    "эльот",
-    "эльотт",
-    "эллюд",
-    "эллиут",
-    "элют",
-    "эйлот",
-
-    // Если Whisper разделил имя на несколько слов
     "али от",
     "алли от",
     "ал лиот",
     "а лиот",
-    "эли от",
-    "элли от",
-    "эй лот",
-    "эй лед",
 
-    // Лишний звук в начале
+    "элиот",
+    "элиод",
+    "эллиот",
+    "эллот",
+    "эллиод",
+    "элли от",
+    "элли",
+    "эли",
+    "эло",
+    "элло",
+    "эллюд",
+    "эллиут",
+    "элют",
+    "элет",
+    "эллото",
+
     "наллиот",
+    "налиот",
 ];
 
-/// Проверяет, содержит ли текст обращение к Alliot.
-///
-/// Примеры:
-///
-/// "аллиот открой блендер"
-/// -> true
-///
-/// "эльот открой блендер"
-/// -> true
-///
-/// "алюд открой блендер"
-/// -> true
-///
-/// "открой блендер"
-/// -> false
-pub fn contains_wake_word(text: &str) -> bool {
-    let normalized = normalize(text);
 
-    if normalized.is_empty() {
-        return false;
-    }
+// ============================================================
+// CONTAINS
+// ============================================================
 
-    find_wake_word(&normalized).is_some()
+pub fn contains_wake_word(
+    text: &str,
+) -> bool {
+
+    let normalized =
+        normalize(text);
+
+    WAKE_WORD_VARIANTS
+        .iter()
+        .any(|variant| {
+            contains_variant(
+                &normalized,
+                variant,
+            )
+        })
 }
 
-/// Удаляет первое найденное обращение к Alliot.
-///
-/// Например:
-///
-/// "аллиот открой блендер"
-/// -> "открой блендер"
-///
-/// "эльот открой blender"
-/// -> "открой blender"
-///
-/// Если wake word не найден:
-///
-/// "открой блендер"
-/// -> "открой блендер"
-pub fn remove_wake_word(text: &str) -> String {
-    let normalized = normalize(text);
 
-    if normalized.is_empty() {
-        return String::new();
-    }
+// ============================================================
+// EXTRACT COMMAND
+// ============================================================
+//
+// Examples:
+//
+// "аллиот"
+//     -> Some("")
+//
+// "аллиот открой blender"
+//     -> Some("открой blender")
+//
+// "привет аллиот открой blender"
+//     -> Some("открой blender")
+//
+// "открой blender"
+//     -> None
+//
+// ============================================================
 
-    let Some((start, end)) = find_wake_word(&normalized) else {
+pub fn extract_command(
+    text: &str,
+) -> Option<String> {
+
+    let normalized =
+        normalize(text);
+
+
+    let (start, end) =
+        find_wake_word(
+            &normalized
+        )?;
+
+
+    let _ = start;
+
+
+    let command =
+        normalized[end..]
+            .trim()
+            .to_string();
+
+
+    Some(command)
+}
+
+
+// ============================================================
+// REMOVE WAKE WORD
+// ============================================================
+
+pub fn remove_wake_word(
+    text: &str,
+) -> String {
+
+    let normalized =
+        normalize(text);
+
+
+    let Some((_start, end)) =
+        find_wake_word(
+            &normalized
+        )
+    else {
         return normalized;
     };
 
-    let before = normalized[..start].trim();
-    let after = normalized[end..].trim();
 
-    match (before.is_empty(), after.is_empty()) {
-        (true, true) => String::new(),
-
-        (true, false) => after.to_string(),
-
-        (false, true) => before.to_string(),
-
-        (false, false) => {
-            format!("{} {}", before, after)
-        }
-    }
+    normalized[end..]
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
-/// Ищет первое вхождение wake word.
-///
-/// Возвращает диапазон байтов:
-///
-/// (start, end)
-///
-/// Диапазон используется для безопасного удаления
-/// wake word из UTF-8 строки.
+
+// ============================================================
+// FIND WAKE WORD
+// ============================================================
+
 fn find_wake_word(
     text: &str,
 ) -> Option<(usize, usize)> {
 
-    let words: Vec<&str> =
-        text.split_whitespace().collect();
+    let normalized =
+        normalize(text);
 
-    if words.is_empty() {
-        return None;
-    }
 
-    /*
-     * Сначала проверяем длинные варианты.
-     *
-     * Например:
-     *
-     * "алли от"
-     *
-     * должен проверяться раньше,
-     * чем отдельные части.
-     */
-    let mut variants =
-        WAKE_WORD_VARIANTS.to_vec();
+    let mut best_match:
+        Option<(usize, usize)> =
+        None;
 
-    variants.sort_by(|a, b| {
-        let a_words =
-            a.split_whitespace().count();
 
-        let b_words =
-            b.split_whitespace().count();
+    for variant in
+        WAKE_WORD_VARIANTS
+    {
 
-        b_words
-            .cmp(&a_words)
-            .then_with(|| {
-                b.len().cmp(&a.len())
-            })
-    });
+        let mut search_from =
+            0usize;
 
-    /*
-     * Проверяем каждый вариант
-     * как последовательность отдельных слов.
-     *
-     * Это важно.
-     *
-     * Мы не используем:
-     *
-     * text.contains("алиот")
-     *
-     * потому что это может дать ложные совпадения
-     * внутри другого слова.
-     */
-    for variant in variants {
-        let variant_words: Vec<&str> =
-            variant
-                .split_whitespace()
-                .collect();
 
-        if variant_words.is_empty() {
-            continue;
-        }
-
-        if variant_words.len() > words.len() {
-            continue;
-        }
-
-        for index in 0..=
-            words.len() - variant_words.len()
+        while let Some(relative_start) =
+            normalized[search_from..]
+                .find(variant)
         {
-            let window =
-                &words[
-                    index
-                        ..index
-                            + variant_words.len()
-                ];
-
-            if window != variant_words {
-                continue;
-            }
-
-            /*
-             * Нашли совпадение.
-             *
-             * Теперь вычисляем диапазон
-             * непосредственно в исходной
-             * нормализованной строке.
-             */
 
             let start =
-                if index == 0 {
-                    0
-                } else {
-                    find_nth_word_start(
-                        text,
-                        index,
-                    )?
-                };
+                search_from
+                    + relative_start;
 
-            let end_word_index =
-                index
-                    + variant_words.len()
-                    - 1;
 
             let end =
-                find_word_end(
-                    text,
-                    end_word_index,
-                )?;
+                start
+                    + variant.len();
 
-            return Some((start, end));
-        }
-    }
 
-    None
-}
+            if is_word_boundary(
+                &normalized,
+                start,
+                end,
+            ) {
 
-/// Возвращает позицию начала N-го слова.
-///
-/// Например:
-///
-/// "аллиот открой blender"
-///
-/// word 0 -> начало "аллиот"
-/// word 1 -> начало "открой"
-/// word 2 -> начало "blender"
-fn find_nth_word_start(
-    text: &str,
-    word_index: usize,
-) -> Option<usize> {
+                match best_match {
 
-    let mut current_word = 0;
+                    None => {
+                        best_match =
+                            Some((start, end));
+                    }
 
-    for (index, character) in text.char_indices() {
+                    Some((
+                        current_start,
+                        current_end,
+                    )) => {
 
-        if character.is_whitespace() {
-            continue;
-        }
+                        let current_length =
+                            current_end
+                                - current_start;
 
-        /*
-         * Если это первый символ слова,
-         * проверяем, нужное ли это слово.
-         */
-        let previous_is_whitespace =
-            index == 0
-                || text[..index]
-                    .chars()
-                    .last()
-                    .map(|c| c.is_whitespace())
-                    .unwrap_or(false);
 
-        if previous_is_whitespace {
+                        let new_length =
+                            end - start;
 
-            if current_word == word_index {
-                return Some(index);
+
+                        if start
+                            < current_start
+                            || (
+                                start
+                                    == current_start
+                                && new_length
+                                    > current_length
+                            )
+                        {
+                            best_match =
+                                Some((start, end));
+                        }
+                    }
+                }
+
+                break;
             }
 
-            current_word += 1;
+
+            search_from =
+                end;
         }
     }
 
-    None
+
+    best_match
 }
 
-/// Возвращает позицию конца N-го слова.
-fn find_word_end(
+
+// ============================================================
+// VARIANT MATCH
+// ============================================================
+
+fn contains_variant(
     text: &str,
-    word_index: usize,
-) -> Option<usize> {
+    variant: &str,
+) -> bool {
 
-    let start =
-        find_nth_word_start(
-            text,
-            word_index,
-        )?;
+    let mut search_from =
+        0usize;
 
-    for (offset, character)
-        in text[start..].char_indices()
+
+    while let Some(relative_start) =
+        text[search_from..]
+            .find(variant)
     {
-        if character.is_whitespace() {
-            return Some(
-                start + offset
-            );
+
+        let start =
+            search_from
+                + relative_start;
+
+
+        let end =
+            start
+                + variant.len();
+
+
+        if is_word_boundary(
+            text,
+            start,
+            end,
+        ) {
+            return true;
         }
+
+
+        search_from =
+            end;
     }
 
-    Some(text.len())
+
+    false
 }
 
-/// Нормализует текст Whisper.
-///
-/// Пример:
-///
-/// "Аллиот, открой Blender!"
-///
-/// ->
-///
-/// "аллиот открой blender"
-///
-/// Делается:
-///
-/// 1. lowercase
-/// 2. ё -> е
-/// 3. удаление пунктуации
-/// 4. нормализация пробелов
-fn normalize(text: &str) -> String {
-    text.to_lowercase()
+
+// ============================================================
+// WORD BOUNDARY
+// ============================================================
+
+fn is_word_boundary(
+    text: &str,
+    start: usize,
+    end: usize,
+) -> bool {
+
+    let before_ok =
+        if start == 0 {
+
+            true
+
+        } else {
+
+            text[..start]
+                .chars()
+                .next_back()
+                .map(|character| {
+                    !character.is_alphanumeric()
+                })
+                .unwrap_or(true)
+        };
+
+
+    let after_ok =
+        if end >= text.len() {
+
+            true
+
+        } else {
+
+            text[end..]
+                .chars()
+                .next()
+                .map(|character| {
+                    !character.is_alphanumeric()
+                })
+                .unwrap_or(true)
+        };
+
+
+    before_ok
+        && after_ok
+}
+
+
+// ============================================================
+// NORMALIZE
+// ============================================================
+
+fn normalize(
+    text: &str,
+) -> String {
+
+    text
+        .to_lowercase()
         .replace('ё', "е")
         .chars()
         .map(|character| {
@@ -332,6 +347,7 @@ fn normalize(text: &str) -> String {
             } else {
                 ' '
             }
+
         })
         .collect::<String>()
         .split_whitespace()

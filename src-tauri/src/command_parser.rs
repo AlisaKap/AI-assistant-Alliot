@@ -75,6 +75,7 @@ fn extract_intent(text: &str) -> Option<CommandIntent> {
             "отскр",
             "запуст",
             "включ",
+            "ключ",
         ],
     ) {
         return Some(CommandIntent::Open);
