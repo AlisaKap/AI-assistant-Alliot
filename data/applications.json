@@ -1,0 +1,21 @@
+{
+  "blender": {
+    "name": "Blender",
+    "path": "C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender-launcher.exe"
+  },
+
+  "photoshop": {
+    "name": "Photoshop",
+    "path": "C:\\Program Files\\Adobe\\Adobe Photoshop CC 2019\\Photoshop.exe"
+  },
+
+  "illustrator": {
+    "name": "Illustrator",
+    "path": "C:\\Program Files\\Adobe\\Adobe Illustrator 2024\\Support Files\\Contents\\Windows\\Illustrator.exe"
+  },
+
+  "figma": {
+    "name": "Figma",
+    "path": "C:\\Users\\alisa\\AppData\\Local\\Figma\\app-126.8.16\\Figma.exe"
+  }
+}

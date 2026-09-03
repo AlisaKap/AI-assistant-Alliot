@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build
+dist/
+build/
+
+# Tauri
+src-tauri/target/
+
+# IDE
+.idea/
+
+# Environment / secrets
+.env
+.env.*
+
+# Logs
+*.log
+
+# AI models
+src-tauri/models/
+
+# OS
+.DS_Store
+Thumbs.db
