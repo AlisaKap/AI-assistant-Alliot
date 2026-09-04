@@ -303,60 +303,40 @@ function App() {
 
   return (
 
-    <main
-      className={`app app--${assistantState}`}
-    >
+    <main className={`app app--${assistantState}`}>
 
       <div className="assistant">
 
-        {/* ================================================== */}
-        {/* AVATAR */}
-        {/* ================================================== */}
-
-        <video
-          className="assistant__avatar"
-          src={alliotIdle}
-          autoPlay
-          loop
-          muted
-          playsInline
-        />
+        <button
+          className="assistant__button"
+          type="button"
+          onClick={handleVoiceClick}
+          disabled={
+            assistantState === "recording" ||
+            assistantState === "analyzing"
+          }
+          aria-label="Начать голосовую команду"
+        >
+          <video
+            className="assistant__avatar"
+            src={alliotIdle}
+            autoPlay
+            loop
+            muted
+            playsInline
+          />
+        </button>
 
         <div
           className="assistant__state"
           aria-live="polite"
         >
-
           {getStateText()}
-
         </div>
 
       </div>
 
-
-      {/* ==================================================== */}
-      {/* MICROPHONE */}
-      {/* ==================================================== */}
-
-      <button
-        className="microphone"
-        type="button"
-        onClick={handleVoiceClick}
-        disabled={
-          assistantState === "recording" ||
-          assistantState === "analyzing"
-        }
-        aria-label="Начать голосовую команду"
-      >
-
-        <span className="microphone__icon">
-          ●
-        </span>
-
-      </button>
-
     </main>
-
   );
 }
 

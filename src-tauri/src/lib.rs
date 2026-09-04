@@ -9,6 +9,7 @@ mod voice_state;
 mod wake_word;
 
 use std::sync::OnceLock;
+use whisper_rs::install_logging_hooks;
 
 pub static VOICE_STATE: OnceLock<voice_state::VoiceStateManager> =
     OnceLock::new();
@@ -40,6 +41,8 @@ pub fn get_microphone()
     tauri::mobile_entry_point
 )]
 pub fn run() {
+
+    install_logging_hooks();
 
     tauri::Builder::default()
 
@@ -102,10 +105,11 @@ pub fn run() {
                 app
                     .get_webview_window("main")
                     .ok_or_else(|| {
-                        "main window not found"
-                            .to_string()
+                        "main window not found".to_string()
                     })?;
 
+            window.set_decorations(false)?;
+            window.set_shadow(false)?;
 
             // --------------------------------------------------
             // MONITOR
@@ -135,10 +139,10 @@ pub fn run() {
             // --------------------------------------------------
 
             let window_width =
-                360.0 * scale_factor;
+                250.0 * scale_factor;
 
             let window_height =
-                500.0 * scale_factor;
+                300.0 * scale_factor;
 
             let margin =
                 24.0 * scale_factor;

@@ -330,10 +330,6 @@ impl Microphone {
                 .clone();
 
 
-        set_voice_state(
-            crate::voice_state::VoiceState::Off
-        );
-
         println!(
             "[VOICE] recording = OFF, {} samples",
             audio.len()
@@ -412,10 +408,6 @@ impl Microphone {
 pub fn start_microphone()
     -> Result<Microphone, String>
 {
-
-    if let Some(state) = crate::VOICE_STATE.get() {
-        state.set(crate::voice_state::VoiceState::WaitingForWakeWord);
-    }
 
     let host =
         cpal::default_host();
@@ -969,18 +961,10 @@ fn process_audio(
     if recorded_seconds
         >= MAX_COMMAND_SECONDS
     {
-
-        println!(
-            "[VOICE] достигнут максимум {:.1}s",
-            MAX_COMMAND_SECONDS
-        );
-
-
         auto_stop.store(
             true,
             Ordering::SeqCst,
         );
-
 
         return;
     }
@@ -1127,13 +1111,6 @@ fn process_audio(
     if speech_seconds
         >= MIN_SPEECH_SECONDS
     {
-
-        println!(
-            "[VOICE] конец речи: {:.2}s",
-            speech_seconds
-        );
-
-
         auto_stop.store(
             true,
             Ordering::SeqCst,
@@ -1303,12 +1280,6 @@ pub fn start_wake_word_listener(
                 continue;
             }
 
-
-            println!(
-                "[WAKE] речь обнаружена, проверяю..."
-            );
-
-
             // ==================================================
             // TRANSCRIBE
             // ==================================================
@@ -1344,10 +1315,6 @@ pub fn start_wake_word_listener(
             // ==================================================
             // FIND WAKE WORD
             // ==================================================
-
-            if let Some(state) = crate::VOICE_STATE.get() {
-                state.set(crate::voice_state::VoiceState::Listening);
-            }
 
             let command =
                 match crate::wake_word::extract_command(
@@ -1411,6 +1378,10 @@ pub fn start_wake_word_listener(
                 // UI: ANALYZING
                 // ------------------------------------------------
 
+                set_voice_state(
+                    crate::voice_state::VoiceState::Analyzing
+                );
+
                 emit_event(
                     &app,
                     "voice-analyzing",
@@ -1425,6 +1396,10 @@ pub fn start_wake_word_listener(
                 // ------------------------------------------------
                 // UI: IDLE
                 // ------------------------------------------------
+
+                set_voice_state(
+                    crate::voice_state::VoiceState::WaitingForWakeWord
+                );
 
                 emit_event(
                     &app,
@@ -1454,11 +1429,6 @@ pub fn start_wake_word_listener(
             println!(
                 "[WAKE] Аллиот активирован"
             );
-
-            println!(
-                "[WAKE] жду команду..."
-            );
-
 
             // ==================================================
             // UI: WAKE
@@ -1503,9 +1473,9 @@ pub fn start_wake_word_listener(
             // UI: IDLE
             // ==================================================
 
-            if let Some(state) = crate::VOICE_STATE.get() {
-                state.set(crate::voice_state::VoiceState::Analyzing);
-            }
+            set_voice_state(
+                crate::voice_state::VoiceState::WaitingForWakeWord
+            );
 
             emit_event(
                 &app,
@@ -1558,6 +1528,9 @@ pub fn stop_wake_word_listener()
         Ordering::SeqCst,
     );
 
+    set_voice_state(
+        crate::voice_state::VoiceState::Off
+    );
 
     println!(
         "[WAKE] listener остановлен"
@@ -1609,8 +1582,17 @@ fn listen_for_command(
     // ========================================================
 
     let audio =
-        microphone.wait_for_recording_end()?;
+        match microphone.wait_for_recording_end() {
+            Ok(audio) => audio,
 
+            Err(error) => {
+                set_voice_state(
+                    crate::voice_state::VoiceState::Error
+                );
+
+                return Err(error);
+            }
+        };
 
     if audio.is_empty() {
 
@@ -1618,13 +1600,6 @@ fn listen_for_command(
             "Команда не содержит аудио".to_string()
         );
     }
-
-
-    println!(
-        "[COMMAND] получено {} samples",
-        audio.len()
-    );
-
 
     // ========================================================
     // UI: ANALYZING
@@ -1645,25 +1620,24 @@ fn listen_for_command(
     // ========================================================
 
     let text =
-        transcribe(
+        match transcribe(
             &audio,
             microphone.sample_rate(),
-        )?;
+        ) {
+            Ok(text) => text,
 
+            Err(error) => {
+                set_voice_state(
+                    crate::voice_state::VoiceState::Error
+                );
 
-    println!(
-        "[COMMAND] Whisper: {}",
-        text
-    );
-
+                return Err(error);
+            }
+        };
 
     // ========================================================
     // REMOVE WAKE WORD
     // ========================================================
-
-    set_voice_state(
-        crate::voice_state::VoiceState::WaitingForWakeWord
-    );
 
     let command =
         crate::wake_word::remove_wake_word(
@@ -1957,7 +1931,6 @@ pub fn transcribe(
                 best_of: 1,
             }
         );
-
 
     params.set_language(
         Some("ru")
